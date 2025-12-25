@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spriteforge"
+version = "0.1.0"
+description = "A VAE for generating 2D pixel art sprites"
+readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+requires-python = ">=3.10"
+authors = [
+    {name = "cmelnulabs", email = "cmelnulabs@users.noreply.github.com"}
+]
+keywords = ["vae", "generative", "sprites", "pixel-art", "deep-learning", "pytorch"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "numpy>=1.24.0",
+    "Pillow>=9.0.0",
+    "tqdm>=4.65.0",
+    "pyyaml>=6.0",
+    "tensorboard>=2.13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "ruff>=0.0.270",
+    "mypy>=1.3.0",
+]
+notebooks = [
+    "jupyter>=1.0.0",
+    "matplotlib>=3.7.0",
+]
+
+[project.scripts]
+spriteforge = "spriteforge.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/cmelnulabs/spriteforge"
+Repository = "https://github.com/cmelnulabs/spriteforge"
+Documentation = "https://github.com/cmelnulabs/spriteforge#readme"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["spriteforge*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "N", "D", "UP"]
+ignore = ["D100", "D104"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
