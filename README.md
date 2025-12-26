@@ -1,6 +1,6 @@
 # SpriteForge
 
-A Variational Autoencoder for generating 2D pixel art sprites.
+A text-to-sprite GAN for generating 2D pixel art sprites from text descriptions.
 
 ## Installation
 
@@ -12,17 +12,17 @@ pip install -e .
 
 Train a model:
 ```bash
-spriteforge train ./sprites/ --epochs 100
+spriteforge train ./sprites/ --captions captions.json --epochs 100
 ```
 
-Generate sprites:
+Generate sprites from text:
 ```bash
-spriteforge generate model.pt --num 16
+spriteforge generate model_G.pt model_T.pt --text "red warrior with sword"
 ```
 
-Interpolate between sprites:
+Generate multiple variations:
 ```bash
-spriteforge interpolate model.pt sprite1.png sprite2.png
+spriteforge generate model_G.pt model_T.pt --text "blue potion" --num 16
 ```
 
 ## License

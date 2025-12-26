@@ -145,13 +145,14 @@ runs/
 wandb/
 mlruns/
 
-# Data files (uncomment if you don't want to track data)
-# *.csv
-# *.json
-# *.npy
-# *.npz
-# data/raw/
-# data/processed/
+# Data files
+*.npy
+*.npz
+data/sprites_train/
+data/sprites_processed/
+data/raw/
+sample_sprite.png
+generated/
 
 # Temporary files
 *.tmp

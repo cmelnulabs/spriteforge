@@ -7,7 +7,9 @@ including the VAE and its encoder/decoder components.
 
 from spriteforge.models.base import BaseDecoder, BaseEncoder, BaseModel, BaseVAE
 from spriteforge.models.encoder_decoder import ConvDecoder, ConvEncoder
-from spriteforge.models.vae import SpriteVAE, VAEOutput
+from spriteforge.models.discriminator import SpriteDiscriminator, PatchDiscriminator
+from spriteforge.models.generator import SpriteGenerator
+from spriteforge.models.text_encoder import SimpleTextEncoder, CLIPStyleEncoder, VAEOutput
 
 __all__ = [
     # Base classes

@@ -1,153 +1,325 @@
 """
-Loss functions for VAE training.
+Loss functions for text-to-sprite GAN training.
 
-This module implements the VAE loss function which combines
-reconstruction loss with KL divergence regularization.
+This module implements loss functions for training GANs including
+adversarial losses and auxiliary text-matching losses.
 """
 
 import torch
 import torch.nn.functional as F
 
 
-def reconstruction_loss(
-    x_recon: torch.Tensor,
-    x_target: torch.Tensor,
-    reduction: str = "mean",
-) -> torch.Tensor:
-    """
-    Compute pixel-wise reconstruction loss.
-    
-    Uses binary cross-entropy for images with values in [0, 1].
-    BCE is preferred over MSE for pixel art as it handles the
-    discrete nature of pixel colors better.
-    
-    Args:
-        x_recon: Reconstructed images, shape (B, C, H, W).
-        x_target: Target images, shape (B, C, H, W).
-        reduction: 'mean', 'sum', or 'none'.
-    
-    Returns:
-        Reconstruction loss value.
-    """
-    # Use BCE loss for [0, 1] normalized images
-    loss = F.binary_cross_entropy(x_recon, x_target, reduction=reduction)
-    
-    return loss
-
-
-def kl_divergence(
-    mu: torch.Tensor,
-    log_var: torch.Tensor,
-    reduction: str = "mean",
-) -> torch.Tensor:
-    """
-    Compute KL divergence from latent distribution to standard normal.
-    
-    KL(q(z|x) || p(z)) where q is the encoder distribution N(mu, sigma)
-    and p is the prior N(0, I).
-    
-    The closed-form solution for Gaussian distributions:
-    KL = -0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-    
-    Args:
-        mu: Mean of the latent distribution, shape (B, latent_dim).
-        log_var: Log variance of the latent distribution, shape (B, latent_dim).
-        reduction: 'mean', 'sum', or 'none'.
-    
-    Returns:
-        KL divergence value.
-    """
-    # KL divergence formula
-    kl = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=-1)
-    
-    if reduction == "mean":
-        return kl.mean()
-    elif reduction == "sum":
-        return kl.sum()
-    return kl
-
-
-def vae_loss(
-    x_recon: torch.Tensor,
-    x_target: torch.Tensor,
-    mu: torch.Tensor,
-    log_var: torch.Tensor,
-    beta: float = 1.0,
+def generator_loss_bce(
+    fake_realness: torch.Tensor,
+    fake_matching: torch.Tensor,
+    matching_weight: float = 1.0,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
-    Compute the full VAE loss (ELBO).
+    Compute Generator loss using Binary Cross-Entropy.
     
-    Loss = Reconstruction Loss + beta * KL Divergence
-    
-    The beta parameter controls the weight of the KL term:
-    - beta = 1: Standard VAE
-    - beta < 1: Less regularization, better reconstruction
-    - beta > 1: More regularization, smoother latent space (beta-VAE)
+    Generator wants:
+    1. Discriminator to think fake images are real (realness = 1)
+    2. Discriminator to think fake images match the text (matching = 1)
     
     Args:
-        x_recon: Reconstructed images from decoder.
-        x_target: Original input images.
-        mu: Mean from encoder.
-        log_var: Log variance from encoder.
-        beta: Weight for KL divergence term.
+        fake_realness: Discriminator's realness score for fake images, shape (batch, 1).
+        fake_matching: Discriminator's matching score for fake images, shape (batch, 1).
+        matching_weight: Weight for the matching loss term.
     
     Returns:
-        Tuple of (total_loss, recon_loss, kl_loss).
+        Tuple of (total_loss, realness_loss, matching_loss).
     
     Example:
-        >>> output = vae(x)
-        >>> total, recon, kl = vae_loss(
-        ...     output.reconstruction, x, output.mu, output.log_var
+        >>> fake_realness = torch.rand(16, 1)  # Discriminator output for fakes
+        >>> fake_matching = torch.rand(16, 1)
+        >>> total, real_loss, match_loss = generator_loss_bce(fake_realness, fake_matching)
+    """
+    # Generator wants discriminator to output 1 (real) for fake images
+    target_real = torch.ones_like(fake_realness)
+    realness_loss = F.binary_cross_entropy(fake_realness, target_real)
+    
+    # Generator wants matching score to be 1 (text matches image)
+    target_match = torch.ones_like(fake_matching)
+    matching_loss = F.binary_cross_entropy(fake_matching, target_match)
+    
+    total = realness_loss + matching_weight * matching_loss
+    
+    return total, realness_loss, matching_loss
+
+
+def discriminator_loss_bce(
+    real_realness: torch.Tensor,
+    fake_realness: torch.Tensor,
+    real_matching: torch.Tensor,
+    fake_matching: torch.Tensor,
+    wrong_matching: torch.Tensor | None = None,
+    matching_weight: float = 1.0,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Compute Discriminator loss using Binary Cross-Entropy.
+    
+    Discriminator learns to:
+    1. Classify real images as real (realness = 1)
+    2. Classify fake images as fake (realness = 0)
+    3. Match correct text-image pairs (matching = 1)
+    4. Reject wrong text-image pairs (matching = 0)
+    
+    Args:
+        real_realness: Realness score for real images, shape (batch, 1).
+        fake_realness: Realness score for fake images, shape (batch, 1).
+        real_matching: Matching score for correct text-image pairs, shape (batch, 1).
+        fake_matching: Matching score for fake images with correct text, shape (batch, 1).
+        wrong_matching: Optional matching score for real images with wrong text, shape (batch, 1).
+        matching_weight: Weight for matching loss terms.
+    
+    Returns:
+        Tuple of (total_loss, realness_loss, matching_loss, wrong_loss).
+    
+    Example:
+        >>> real_realness = torch.rand(16, 1)
+        >>> fake_realness = torch.rand(16, 1)
+        >>> real_matching = torch.rand(16, 1)
+        >>> fake_matching = torch.rand(16, 1)
+        >>> total, real_loss, match_loss, wrong_loss = discriminator_loss_bce(
+        ...     real_realness, fake_realness, real_matching, fake_matching
         ... )
-        >>> total.backward()
     """
-    recon = reconstruction_loss(x_recon, x_target)
-    kl = kl_divergence(mu, log_var)
+    # Realness loss: real=1, fake=0
+    target_real = torch.ones_like(real_realness)
+    target_fake = torch.zeros_like(fake_realness)
     
-    total = recon + beta * kl
+    realness_loss = (
+        F.binary_cross_entropy(real_realness, target_real) +
+        F.binary_cross_entropy(fake_realness, target_fake)
+    ) / 2
     
-    return total, recon, kl
+    # Matching loss: correct pairs=1, incorrect pairs=0
+    target_match = torch.ones_like(real_matching)
+    target_no_match = torch.zeros_like(fake_matching)
+    
+    matching_loss = (
+        F.binary_cross_entropy(real_matching, target_match) +
+        F.binary_cross_entropy(fake_matching, target_no_match)
+    ) / 2
+    
+    # Optional: penalize real images with wrong text
+    wrong_loss = torch.tensor(0.0, device=real_realness.device)
+    if wrong_matching is not None:
+        wrong_loss = F.binary_cross_entropy(wrong_matching, target_no_match)
+        matching_loss = (matching_loss * 2 + wrong_loss) / 3
+    
+    total = realness_loss + matching_weight * matching_loss
+    
+    return total, realness_loss, matching_loss, wrong_loss
 
 
-class VAELoss:
+def generator_loss_wgan(
+    fake_realness: torch.Tensor,
+    fake_matching: torch.Tensor,
+    matching_weight: float = 1.0,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
-    Callable VAE loss class with configurable parameters.
+    Compute Generator loss using Wasserstein GAN objective.
     
-    Provides a cleaner interface for loss computation during training.
+    Wasserstein distance provides better training stability and
+    meaningful loss curves compared to BCE.
+    
+    Args:
+        fake_realness: Discriminator output for fake images (not sigmoid-activated).
+        fake_matching: Matching score for fake images (sigmoid-activated).
+        matching_weight: Weight for matching loss.
+    
+    Returns:
+        Tuple of (total_loss, realness_loss, matching_loss).
+    """
+    # Generator wants to maximize discriminator output for fakes
+    # Equivalent to minimizing the negative
+    realness_loss = -fake_realness.mean()
+    
+    # Matching loss remains BCE-based
+    target_match = torch.ones_like(fake_matching)
+    matching_loss = F.binary_cross_entropy(fake_matching, target_match)
+    
+    total = realness_loss + matching_weight * matching_loss
+    
+    return total, realness_loss, matching_loss
+
+
+def discriminator_loss_wgan(
+    real_realness: torch.Tensor,
+    fake_realness: torch.Tensor,
+    real_matching: torch.Tensor,
+    fake_matching: torch.Tensor,
+    matching_weight: float = 1.0,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Compute Discriminator loss using Wasserstein GAN objective.
+    
+    Args:
+        real_realness: Discriminator output for real images (not sigmoid-activated).
+        fake_realness: Discriminator output for fake images (not sigmoid-activated).
+        real_matching: Matching score for correct pairs (sigmoid-activated).
+        fake_matching: Matching score for incorrect pairs (sigmoid-activated).
+        matching_weight: Weight for matching loss.
+    
+    Returns:
+        Tuple of (total_loss, realness_loss, matching_loss).
+    """
+    # Wasserstein distance: maximize D(real) - D(fake)
+    # Equivalent to minimizing -(D(real) - D(fake)) = D(fake) - D(real)
+    realness_loss = fake_realness.mean() - real_realness.mean()
+    
+    # Matching loss (BCE-based)
+    target_match = torch.ones_like(real_matching)
+    target_no_match = torch.zeros_like(fake_matching)
+    
+    matching_loss = (
+        F.binary_cross_entropy(real_matching, target_match) +
+        F.binary_cross_entropy(fake_matching, target_no_match)
+    ) / 2
+    
+    total = realness_loss + matching_weight * matching_loss
+    
+    return total, realness_loss, matching_loss
+
+
+def gradient_penalty(
+    discriminator: torch.nn.Module,
+    real_images: torch.Tensor,
+    fake_images: torch.Tensor,
+    text_embedding: torch.Tensor,
+    lambda_gp: float = 10.0,
+) -> torch.Tensor:
+    """
+    Compute gradient penalty for WGAN-GP.
+    
+    Enforces 1-Lipschitz constraint by penalizing gradient norm deviation from 1.
+    
+    Args:
+        discriminator: The discriminator network.
+        real_images: Real sprite images.
+        fake_images: Generated sprite images.
+        text_embedding: Text embeddings.
+        lambda_gp: Gradient penalty coefficient.
+    
+    Returns:
+        Gradient penalty loss.
+    """
+    batch_size = real_images.size(0)
+    device = real_images.device
+    
+    # Random interpolation weight
+    alpha = torch.rand(batch_size, 1, 1, 1, device=device)
+    
+    # Interpolate between real and fake images
+    interpolated = (alpha * real_images + (1 - alpha) * fake_images).requires_grad_(True)
+    
+    # Get discriminator output for interpolated images
+    d_interpolated, _ = discriminator(interpolated, text_embedding)
+    
+    # Compute gradients
+    gradients = torch.autograd.grad(
+        outputs=d_interpolated,
+        inputs=interpolated,
+        grad_outputs=torch.ones_like(d_interpolated),
+        create_graph=True,
+        retain_graph=True,
+    )[0]
+    
+    # Flatten gradients
+    gradients = gradients.view(batch_size, -1)
+    
+    # Compute gradient norm
+    gradient_norm = gradients.norm(2, dim=1)
+    
+    # Penalty for deviation from norm=1
+    penalty = lambda_gp * ((gradient_norm - 1) ** 2).mean()
+    
+    return penalty
+
+
+class GANLoss:
+    """
+    Configurable GAN loss wrapper.
+    
+    Supports multiple GAN objectives:
+    - BCE (vanilla GAN)
+    - WGAN (Wasserstein GAN)
+    - WGAN-GP (Wasserstein GAN with Gradient Penalty)
     
     Attributes:
-        beta: KL divergence weight.
-        beta_warmup_epochs: Number of epochs to warm up beta from 0.
+        mode: Loss mode ('bce', 'wgan', 'wgan-gp').
+        matching_weight: Weight for text-matching loss.
+        lambda_gp: Gradient penalty weight (for WGAN-GP).
     
     Example:
-        >>> criterion = VAELoss(beta=1.0, beta_warmup_epochs=10)
-        >>> for epoch in range(100):
-        ...     criterion.set_epoch(epoch)
-        ...     loss, recon, kl = criterion(output, target)
+        >>> criterion = GANLoss(mode='bce', matching_weight=1.0)
+        >>> # For discriminator
+        >>> d_loss, *_ = criterion.discriminator_loss(
+        ...     real_realness, fake_realness, real_matching, fake_matching
+        ... )
+        >>> # For generator  
+        >>> g_loss, *_ = criterion.generator_loss(fake_realness, fake_matching)
     """
     
     def __init__(
         self,
-        beta: float = 1.0,
-        beta_warmup_epochs: int = 0,
+        mode: str = "bce",
+        matching_weight: float = 1.0,
+        lambda_gp: float = 10.0,
     ) -> None:
         """
-        Initialize the VAE loss.
+        Initialize GAN loss.
         
         Args:
-            beta: Target KL divergence weight.
-            beta_warmup_epochs: Epochs to linearly warm up beta.
+            mode: Loss mode ('bce', 'wgan', 'wgan-gp').
+            matching_weight: Weight for matching loss component.
+            lambda_gp: Gradient penalty weight (only for wgan-gp).
         """
-        self.beta = beta
-        self.beta_warmup_epochs = beta_warmup_epochs
-        self._current_epoch = 0
+        assert mode in ["bce", "wgan", "wgan-gp"], f"Invalid mode: {mode}"
+        
+        self.mode = mode
+        self.matching_weight = matching_weight
+        self.lambda_gp = lambda_gp
     
-    def set_epoch(self, epoch: int) -> None:
-        """
-        Set the current epoch for beta warmup.
-        
-        Args:
-            epoch: Current training epoch (0-indexed).
+    def generator_loss(
+        self,
+        fake_realness: torch.Tensor,
+        fake_matching: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Compute generator loss based on mode."""
+        if self.mode == "bce":
+            return generator_loss_bce(fake_realness, fake_matching, self.matching_weight)
+        else:  # wgan or wgan-gp (same for generator)
+            return generator_loss_wgan(fake_realness, fake_matching, self.matching_weight)
+    
+    def discriminator_loss(
+        self,
+        real_realness: torch.Tensor,
+        fake_realness: torch.Tensor,
+        real_matching: torch.Tensor,
+        fake_matching: torch.Tensor,
+        wrong_matching: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, ...]:
+        """Compute discriminator loss based on mode."""
+        if self.mode == "bce":
+            return discriminator_loss_bce(
+                real_realness,
+                fake_realness,
+                real_matching,
+                fake_matching,
+                wrong_matching,
+                self.matching_weight,
+            )
+        else:  # wgan or wgan-gp
+            return discriminator_loss_wgan(
+                real_realness,
+                fake_realness,
+                real_matching,
+                fake_matching,
+                self.matching_weight,
+            )
+
         """
         self._current_epoch = epoch
     

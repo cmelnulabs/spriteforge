@@ -1,7 +1,7 @@
 """
 Base model classes and interfaces for SpriteForge.
 
-This module defines abstract base classes that all models should inherit from,
+This module defines abstract base classes that all GAN models should inherit from,
 ensuring a consistent interface across different architectures.
 """
 
@@ -49,12 +49,13 @@ class BaseModel(nn.Module, ABC):
         return super().to(device)
     
     @abstractmethod
-    def forward(self, x: torch.Tensor) -> Any:
+    def forward(self, *args: Any, **kwargs: Any) -> Any:
         """
         Forward pass through the model.
         
         Args:
-            x: Input tensor.
+            *args: Variable positional arguments.
+            **kwargs: Variable keyword arguments.
             
         Returns:
             Model output (implementation-specific).
@@ -91,109 +92,99 @@ class BaseModel(nn.Module, ABC):
         self.load_state_dict(state_dict, strict=strict)
 
 
-class BaseEncoder(BaseModel):
+class BaseTextEncoder(BaseModel):
     """
-    Abstract base class for encoder networks.
+    Abstract base class for text encoder networks.
     
-    Encoders compress input images into a latent representation.
-    For VAEs, this outputs distribution parameters (mean and log-variance).
+    Text encoders convert text descriptions into embedding vectors
+    that can be used to condition image generation.
     """
     
     @abstractmethod
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, text: list[str]) -> torch.Tensor:
         """
-        Encode input to latent distribution parameters.
+        Encode text descriptions to embedding vectors.
         
         Args:
-            x: Input tensor of shape (batch, channels, height, width).
+            text: List of text descriptions (batch).
             
         Returns:
-            Tuple of (mean, log_variance) tensors for the latent distribution.
+            Text embeddings of shape (batch, embedding_dim).
+        """
+        pass
+    
+    @abstractmethod
+    def get_embedding_dim(self) -> int:
+        """
+        Get the dimension of the text embeddings.
+        
+        Returns:
+            Embedding dimension.
         """
         pass
 
 
-class BaseDecoder(BaseModel):
+class BaseGenerator(BaseModel):
     """
-    Abstract base class for decoder networks.
+    Abstract base class for Generator networks in GANs.
     
-    Decoders reconstruct images from latent representations.
+    Generators create images from noise and conditioning information (text).
     """
     
     @abstractmethod
-    def forward(self, z: torch.Tensor) -> torch.Tensor:
+    def forward(self, noise: torch.Tensor, text_embedding: torch.Tensor) -> torch.Tensor:
         """
-        Decode latent vector to image.
+        Generate images from noise and text embeddings.
         
         Args:
-            z: Latent tensor of shape (batch, latent_dim).
+            noise: Random noise vector of shape (batch, noise_dim).
+            text_embedding: Text embedding of shape (batch, embedding_dim).
             
         Returns:
-            Reconstructed image tensor of shape (batch, channels, height, width).
+            Generated image tensor of shape (batch, channels, height, width).
+        """
+        pass
+    
+    def generate(
+        self, 
+        text_embedding: torch.Tensor, 
+        num_samples: int = 1,
+        noise: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """
+        Generate sprites from text embeddings.
+        
+        Args:
+            text_embedding: Text embedding of shape (1, embedding_dim) or (batch, embedding_dim).
+            num_samples: Number of sprites to generate per text.
+            noise: Optional pre-generated noise. If None, will sample random noise.
+            
+        Returns:
+            Generated sprites of shape (batch*num_samples, channels, height, width).
         """
         pass
 
 
-class BaseVAE(BaseModel):
+class BaseDiscriminator(BaseModel):
     """
-    Abstract base class for Variational Autoencoders.
+    Abstract base class for Discriminator networks in GANs.
     
-    VAEs combine an encoder and decoder with a probabilistic latent space,
-    enabling both reconstruction and generation of new samples.
+    Discriminators evaluate whether images are real or fake,
+    and optionally verify text-image correspondence.
     """
     
     @abstractmethod
-    def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, image: torch.Tensor, text_embedding: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        Encode input to latent distribution parameters.
+        Discriminate real/fake images and check text-image matching.
         
         Args:
-            x: Input tensor.
+            image: Image tensor of shape (batch, channels, height, width).
+            text_embedding: Text embedding of shape (batch, embedding_dim).
             
         Returns:
-            Tuple of (mean, log_variance) for the latent distribution.
-        """
-        pass
-    
-    @abstractmethod
-    def decode(self, z: torch.Tensor) -> torch.Tensor:
-        """
-        Decode latent vector to output.
-        
-        Args:
-            z: Latent tensor.
-            
-        Returns:
-            Reconstructed output tensor.
-        """
-        pass
-    
-    @abstractmethod
-    def reparameterize(self, mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
-        """
-        Apply the reparameterization trick.
-        
-        This enables backpropagation through the stochastic sampling step
-        by expressing the random variable as a deterministic function.
-        
-        Args:
-            mu: Mean of the latent distribution.
-            log_var: Log variance of the latent distribution.
-            
-        Returns:
-            Sampled latent vector.
-        """
-        pass
-    
-    @abstractmethod
-    def generate(self, num_samples: int) -> torch.Tensor:
-        """
-        Generate new samples from the prior distribution.
-        
-        Args:
-            num_samples: Number of samples to generate.
-            
-        Returns:
-            Generated output tensor.
+            Tuple of (realness_score, matching_score):
+                - realness_score: Probability image is real, shape (batch, 1).
+                - matching_score: Probability text matches image, shape (batch, 1).
         """
         pass

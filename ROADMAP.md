@@ -1,103 +1,111 @@
 # SpriteForge Roadmap
 
-> A Variational Autoencoder (VAE) specialized in 2D pixel art sprite generation.
+> A text-conditional GAN specialized in generating 2D pixel art sprites from text descriptions.
 
 ---
 
 ## 🎯 Project Vision
 
-SpriteForge aims to be an educational and practical tool for generating 2D pixel art sprites using deep learning. The project prioritizes clean code, extensive documentation, and a modular architecture that allows experimentation with different VAE variants.
+SpriteForge aims to be an educational and practical tool for generating 2D pixel art sprites using deep learning. The project prioritizes clean code, extensive documentation, and a modular architecture that allows experimentation with different GAN variants and text encoders.
 
 ---
 
-## Phase 1: Foundation (Core VAE)
+## Phase 1: Foundation (Text-to-Sprite GAN)
 
-**Goal**: Implement a working vanilla VAE that can encode and decode simple sprites.
+**Goal**: Implement a working text-conditional GAN that generates sprites from text descriptions.
 
 ### Features
-- [ ] Project structure and development environment setup
-- [ ] Data pipeline for loading and preprocessing sprite datasets
-- [ ] Basic VAE architecture (Encoder → Latent Space → Decoder)
-- [ ] Training loop with reconstruction loss + KL divergence
-- [ ] Model checkpointing and basic logging
-- [ ] Simple CLI for training and inference
+- [x] Project structure and development environment setup
+- [ ] Data pipeline for loading sprites with text captions
+- [x] Generator architecture (Text + Noise → Sprite)
+- [x] Discriminator architecture (Image + Text → Real/Fake + Matching scores)
+- [x] Text encoder (Simple word embeddings + LSTM)
+- [x] GAN loss functions (BCE and Wasserstein)
+- [ ] Training loop with alternating G/D optimization
+- [ ] Model checkpointing and logging
+- [ ] Simple CLI for training and text-based generation
 - [ ] Unit tests for core components
 
 ### Technical Details
-- Input: 32x32 or 64x64 RGB/RGBA sprites
-- Latent space: 128-256 dimensions
+- Input: Text descriptions ("red warrior", "blue potion", etc.)
+- Output: 32x32 or 64x64 RGBA sprites
+- Noise: 100-dimensional Gaussian
+- Text Embedding: 256-dimensional
 - Framework: PyTorch
-- Dataset: Start with simple shapes, then Kenney assets
+- Loss: Adversarial (BCE/WGAN) + Text-Matching
 
 ### Deliverables
-- `spriteforge/models/vae.py` - Core VAE implementation
-- `spriteforge/data/` - Data loading utilities
-- `spriteforge/train.py` - Training script
-- `spriteforge/generate.py` - Generation script
+- `spriteforge/models/generator.py` - Generator implementation ✓
+- `spriteforge/models/discriminator.py` - Discriminator implementation ✓
+- `spriteforge/models/text_encoder.py` - Text encoding ✓
+- `spriteforge/data/` - Data loading with captions
+- `spriteforge/train.py` - GAN training script
+- `spriteforge/generate.py` - Text-to-sprite generation
 - Documentation for all modules
 
 ---
 
-## Phase 2: Enhanced Architecture
+## Phase 2: Enhanced Text Understanding
 
-**Goal**: Improve generation quality with architectural enhancements.
+**Goal**: Improve text-to-sprite alignment with better text encoding.
 
 ### Features
-- [ ] Convolutional VAE (Conv2d layers instead of fully connected)
-- [ ] Residual connections in encoder/decoder
-- [ ] Batch normalization and proper weight initialization
-- [ ] Learning rate scheduling
-- [ ] Early stopping based on validation loss
-- [ ] TensorBoard/Weights & Biases integration
-- [ ] Hyperparameter configuration via YAML files
+- [x] CLIP-style transformer text encoder
+- [ ] Pretrained text encoder integration (actual CLIP)
+- [ ] Multi-word compositional understanding
+- [ ] Attribute extraction (color, type, style)
+- [ ] Negative prompts ("warrior without helmet")
+- [ ] Caption augmentation and paraphrasing
 
 ### Technical Details
-- Encoder: Conv2d → BatchNorm → LeakyReLU → ... → Flatten → μ, σ
-- Decoder: Linear → Reshape → ConvTranspose2d → ... → Sigmoid
-- Loss: BCE/MSE reconstruction + β-weighted KL divergence
+- CLIP text encoder (ViT-B/32 or smaller)
+- Contrastive text-image pre-training
+- Fine-tuning on sprite domain
 
 ### Deliverables
-- `spriteforge/models/conv_vae.py` - Convolutional VAE
-- `spriteforge/config/` - Configuration management
-- Enhanced training metrics and visualization
+- `spriteforge/models/clip_encoder.py` - CLIP integration
+- Enhanced text preprocessing
+- Improved text-image alignment metrics
 
 ---
 
-## Phase 3: Conditional Generation
+## Phase 3: Advanced GAN Architectures
 
-**Goal**: Generate sprites conditioned on labels/categories.
+**Goal**: Experiment with state-of-the-art GAN techniques for better quality.
 
 ### Features
-- [ ] Conditional VAE (CVAE) implementation
-- [ ] Label embedding layer
-- [ ] Support for multi-label conditioning
-- [ ] Category-based generation (e.g., "character", "item", "tile")
-- [ ] Style conditioning (e.g., "medieval", "sci-fi", "fantasy")
-- [ ] Interpolation in latent space between categories
+- [ ] StyleGAN2-inspired architecture
+- [ ] Progressive growing for higher resolutions
+- [ ] Self-attention layers (SAGAN)
+- [ ] Spectral normalization
+- [ ] Feature matching loss
+- [ ] Perceptual loss for fine details
 
 ### Technical Details
-- Condition injection: Concatenate label embedding with latent vector
-- One-hot encoding or learned embeddings for categories
-- Modified loss function for conditional generation
+- Progressive training: 16x16 → 32x32 → 64x64
+- Multi-scale discriminators
+- Adaptive instance normalization (AdaIN)
 
 ### Deliverables
-- `spriteforge/models/cvae.py` - Conditional VAE
-- Dataset annotation tools
-- Conditional generation CLI/API
+- `spriteforge/models/stylegan_generator.py`
+- Progressive training scheduler
+- Multi-resolution pipeline
 
 ---
 
-## Phase 4: Advanced Features
+## Phase 4: Production Features
 
 **Goal**: Production-ready features and quality improvements.
 
 ### Features
-- [ ] β-VAE for disentangled representations
-- [ ] VQ-VAE (Vector Quantized VAE) variant
-- [ ] Sprite sheet generation (multiple frames)
+- [ ] Web UI for interactive generation
+- [ ] Batch generation and sprite sheet export
 - [ ] Animation sequence generation
-- [ ] Palette control and color quantization
-- [ ] Upscaling post-processor (optional super-resolution)
+- [ ] Style transfer between sprites
+- [ ] Inpainting and editing
+- [ ] Upscaling post-processor
+- [ ] Color palette control
+- [ ] FID/IS metrics for quality evaluation
 - [ ] REST API for generation service
 
 ### Technical Details

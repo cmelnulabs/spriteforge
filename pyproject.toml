@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "spriteforge"
 version = "0.1.0"
-description = "A VAE for generating 2D pixel art sprites"
+description = "A text-to-sprite GAN for generating 2D pixel art from text descriptions"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
 requires-python = ">=3.10"
 authors = [
     {name = "cmelnulabs", email = "cmelnulabs@users.noreply.github.com"}
 ]
-keywords = ["vae", "generative", "sprites", "pixel-art", "deep-learning", "pytorch"]
+keywords = ["gan", "text-to-image", "sprites", "pixel-art", "deep-learning", "pytorch", "text-conditional"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
